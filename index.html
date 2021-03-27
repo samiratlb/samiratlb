@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.nodes circle {
+  stroke: #1a2421;
+  stroke-width:1.5px;
+}
+<!--
+.node.group1 {
+	fill:#2E86C1 ;
+}
+
+.node.group2 {
+	fill: #F39312;
+}
+-->
+
+.link {
+	stroke: #999;
+    stroke-opacity: 0.9;
+	stroke-width: 2px;
+	pointer-events: all;
+}
+
+.link.value1 {
+	stroke: #d71868;
+}
+
+.link.value2 {
+	stroke: #177245;
+}
+
+#searchTerm
+{
+position: absolute;
+ width:250px;
+  top: 10px;
+  left: 20px;
+}
+
+#searchbutton
+{
+position: absolute;
+ width:110px;
+  top: 10px;
+  left: 200px;
+}
+
+#thresholdlable
+{
+position: absolute;
+ width:250px;
+  top: 60px;
+  left: 20px;
+}
+
+#threshold
+{
+position: absolute;
+ width:900px;
+  top: 25px;
+  left: 5px;
+}
+
+#c1 {
+  position: absolute; 
+  width:300px;
+  top: 120px;
+  left:5px;
+}
+
+#c2 {
+position: absolute;
+width:300px;
+  top: 160px;
+  left: 5px;
+}
+
+#c3 {
+position: absolute;
+ width:300px;
+  top: 200px;
+  left: 5px;
+}
+
+</style>
+
+<link href="bootstrap.min.css?3.3.7" rel="stylesheet" />
+
+<div class="container">
+ <div class="row">
+  <div class="filter-btn"  id="c1" value="4">
+    <div class="col-md-6">
+      <!-- Here starts the component -->
+      <div class="input-group">
+        <span class="input-group-addon">
+          <input type="checkbox">
+        </span>
+        <span class="form-control btn btn-primary">
+          InfoVis
+        </span>
+       </div>
+      <!-- Here ends the component -->
+	 </div> 
+    </div>
+  </div>
+</div>
+
+
+
+<div class="container">
+ <div class="row">
+  <div class="filter-btn"  id="c2" value="2">
+    <div class="col-md-6">
+      <!-- Here starts the component -->
+      <div class="input-group">
+        <span class="input-group-addon">
+          <input type="checkbox">
+        </span>
+        <span class="form-control btn btn-primary">
+           VAST
+        </span>
+       </div>
+      <!-- Here ends the component -->
+	 </div> 
+    </div>
+  </div>
+</div>
+
+<div class="container">
+ <div class="row">
+  <div class="filter-btn"  id="c3" value="3">
+    <div class="col-md-6">
+      <!-- Here starts the component -->
+        <div class="input-group">
+        <span class="input-group-addon">
+          <input type="checkbox">
+        </span>
+        <span class="form-control btn btn-primary">
+          SciVis
+        </span>
+       </div>
+      <!-- Here ends the component -->
+	 </div> 
+    </div>
+  </div>
+</div>
+
+</style>
+
+
+</style>
+<body>
+
+<div>
+<svg  id="wrapper"  width="1530" height="710"> </svg>
+</div>
+
+<!-- <transform="translate(50, 400)" -->
+<script src="https://d3js.org/d3.v4.min.js"> </script>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.24.0/d3-legend.min.js"></script>
+
+
+<script src= "https://d3js.org/d3-scale-chromatic.v1.min.js" ></script>
+
+<!--<script src="scale-chromatic.js?v1.5.0"></script>-->
+<script src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+<script>
+
+//	data stores
+var graph;
+var  store;
+
+var svg = d3.select("svg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height");
+
+// Call zoom for svg container.
+svg.call(d3.zoom().on('zoom', zoomed));
+var color = d3.scaleOrdinal(d3.schemeCategory10);
+var x = d3.scaleLinear().domain([0, width]).range([0, width]);
+var y = d3.scaleLinear().domain([0, height]).range([0, height]);
+
+/*  color(2);
+  color(5);
+  color(4);
+  color(9);*/
+ 
+var simulation = d3.forceSimulation()
+    .force("link", d3.forceLink())//Or to use names rather than indices: .id(function(d) { return d.id; }))
+    .force("charge", d3.forceManyBody().strength([-120]).distanceMax([500]))
+    .force("center", d3.forceCenter(width / 2, height / 2));
+/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/	
+
+var container = svg.append('g');
+
+/*#########################################################################################################################*/
+// Create form for search (see function below).
+var search = d3.select("body").append('form').attr('onsubmit', 'return false;');
+
+var box = search.append('input')
+	.attr('type', 'text')
+	.attr('id', 'searchTerm')
+	.attr('placeholder', 'Type to search...');
+
+var button = search.append('input')
+	.attr('type', 'button')
+	.attr('value', 'Search_Name')
+	.attr('id', 'searchbutton')
+	.on('click', function () { searchNodes(); });
+/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/	
+
+// Toggle for ego networks on click (below).
+var toggle = 0;
+
+/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+var link = container.append("g").selectAll("line")
+      .attr("class", "links")
+
+var node = container.append("g").selectAll(".node")
+    .attr("class", "nodes")
+
+/************************************************************************************************************************************************************************/
+d3.json("samira.json", function(error, graph) {
+  if (error) throw error;
+  
+  update();
+  
+  // Make object of all neighboring nodes.
+  var linkedByIndex = {};
+  graph.links.forEach(function(d) {
+	  linkedByIndex[d.source + ',' + d.target] = 1;
+	  linkedByIndex[d.target + ',' + d.source] = 1;
+  });
+
+  // A function to test if two nodes are neighboring.
+  function neighboring(a, b) {
+	  return linkedByIndex[a.index + ',' + b.index];
+  }
+
+  // Linear scale for degree centrality.
+  var degreeSize = d3.scaleLinear()
+  	.domain([d3.min(graph.nodes, function(d) {return d.degree; }),d3.max(graph.nodes, function(d) {return d.degree; })])
+  	.range([1,50]);
+
+  // Collision detection based on degree centrality.
+  simulation.force("collide", d3.forceCollide().radius( function (d) { return degreeSize(d.degree); }));
+/*======================================*/
+  var link = container.append("g")
+      .attr("class", "links")
+    .selectAll("line")
+    .data(graph.links, function(d) { return d.source + ", " + d.target;})
+	//.data(graph.links, function(d) { return d.id;})
+    .enter().append("line")
+      .attr('class', 'link')
+	  
+	  
+	   .classed("link", true)
+		.each(function (d) {
+			var value = d.value;
+			d3.select(this).classed("value"+value, true);
+		}); 
+		
+		link.append("title")
+          .text(function(d) { return "source: " + d.source + "\n" + "target: " + d.target; });           
+
+  var node = container.append("g")
+      .attr("class", "nodes")
+    .selectAll("circle")
+    .data(graph.nodes)
+    .enter().append("circle")
+    .attr('r', function(d, i) { return degreeSize(d.degree); })
+      .attr("fill", function(d) { return color(d.group); })
+      .attr('class', 'node')
+	 /* 
+	  .classed("nodes", true)
+		.each(function (d) {
+			var group = d.group;
+			d3.select(this).classed("group"+ group, true);
+		})*/
+		
+		
+      .on('click', function(d, i) {
+	      if (toggle == 0) {
+		      d3.selectAll('.link').style('stroke-opacity', function (l) {
+			      return l.target == d || l.source == d ? 1 : 0.1;
+		      });
+		      d3.selectAll('.node').style('opacity', function (n) {
+			      return neighboring(d, n) ? 1 : 0.1;
+		      });
+		      d3.select(this).style('opacity', 1);
+		      toggle = 1;
+	      }
+	      else {
+		      // Restore nodes and links to normal opacity.
+		      d3.selectAll('.link').style('stroke-opacity', '0.6');
+		      d3.selectAll('.node').style('opacity', '1');
+		      toggle = 0;
+	      }
+      })
+      .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+
+  node.append("title")
+	  .text(function(d) { return  d.category + "\n" +  d.name + "\n" + d.This; });
+
+  simulation
+      .nodes(graph.nodes)
+      .on("tick", ticked);
+
+  simulation.force("link")
+      .links(graph.links);
+
+  function ticked() {
+    link
+        .attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; });
+
+    node
+        .attr("cx", function(d) { return d.x; })
+        .attr("cy", function(d) { return d.y; });
+  }
+
+
+/*OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO*/
+
+  	// A slider (using only d3 and HTML5) that removes nodes below the input threshold.
+	var slider = d3.select('body').append('p').text('filtering nodes base on degree: ')
+	.attr('id', 'thresholdlable');
+	var thresholdWeight=0;
+	
+	slider.append('label')
+       .attr('for', 'threshold')
+	   
+		.text('1');
+	slider.append('input')
+		.attr('type', 'range')
+		.attr('min', d3.min(graph.links, function(d) {return d.weight; }))
+		.attr('max', d3.max(graph.links, function(d) {return d.weight; })/2    )
+		.attr('value', d3.min(graph.links, function(d) {return d.weight; }))
+		.attr('id', 'threshold')
+		.style('width', '100%')
+		.style('display', 'block')
+		.on('input', function () { 
+			thresholdWeight = this.value;
+
+			d3.select('label').text(thresholdWeight);
+			filterGraph();
+
+		});
+
+function filterGraph(){
+// Find the links that are at or above the threshold.
+			var newLink = [];
+			var newNodeObj = {};
+			graph.links.forEach( function (d) {  
+				const filterByType = (!typeFilterList.includes(d.source.type))&&(!typeFilterList.includes(d.target.type));
+				const filterByThreshold = d.weight >= thresholdWeight;
+				//const filterbysomething =(...logic)
+				if (filterByType&&filterByThreshold) {
+					newLink.push(d); 
+					newNodeObj[d.source.id] = d.source;
+					newNodeObj[d.target.id] = d.target;
+				};
+			});
+			
+			var newNode = Object.values(newNodeObj);
+			
+
+
+
+
+			// link update
+			link = link.data(newLink, function(d) {return d.source + ', ' + d.target;});
+			link.exit().remove();
+			var linkEnter = link.enter().append('line').attr('class', 'link');
+			link = linkEnter.merge(link);
+
+
+
+
+			// update
+			node = node.data(newNode,  function(d) {return d.id;});
+			node.exit().remove();
+            var nodeEnter = node.enter().append("circle")
+    .attr('r', function(d, i) { return degreeSize(d.degree); })
+      .attr("fill", function(d) { return color(d.group); })
+      .attr('class', 'node')
+	  
+	  
+      .on('click', function(d, i) {
+	      if (toggle == 0) {
+		      // Ternary operator restyles links and nodes if they are adjacent.
+		      d3.selectAll('.link').style('stroke-opacity', function (l) {
+			      return l.target == d || l.source == d ? 1 : 0.1;
+		      });
+		      d3.selectAll('.node').style('opacity', function (n) {
+			      return neighboring(d, n) ? 1 : 0.1;
+		      });
+		      d3.select(this).style('opacity', 1);
+		      toggle = 1;
+	      }
+	      else {
+		      // Restore nodes and links to normal opacity.
+		      d3.selectAll('.link').style('stroke-opacity', '0.6');
+		      d3.selectAll('.node').style('opacity', '1');
+		      toggle = 0;
+	      }
+      })
+	  
+      .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+			node = node.merge(nodeEnter);
+			
+			
+			
+			// Restart simulation with new link and node
+			simulation
+				.nodes(newNode).on('tick', ticked)
+				.force("link").links(newLink);
+
+			simulation.alphaTarget(0.1).restart();
+
+}
+/*OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO*/
+
+//	filtered types
+typeFilterList = [];
+
+//filter option event handlers
+$(".filter-btn").on("click", function() {
+	var id = +$(this).attr("value");
+	if (typeFilterList.includes(id)) {
+	//d3.select(this).select('span').text('apply_filter');
+		typeFilterList.splice(typeFilterList.indexOf(id), 1)
+	} else {
+	//d3.select(this).select('span').text('reset');
+		typeFilterList.push(id);
+	}
+	filterGraph();
+	
+	
+});
+
+
+/*OOOOOOOOOOOOOOOOOOOOOOOO*/
+
+/*
+ var sequentialScale = d3.scaleOrdinal(d3.schemeCategory10)
+   .domain(["author", "paper", "author_author", "author_paper"]);
+
+
+svg.append("g")
+  .attr("class", "legendSequential")
+  //.attr("transform", "translate("-(width+140)+","+(height-400)+")");
+//.attr("transform", "translate("-(width-140)+","+(height-300)+")");
+ .attr("transform", "translate(10,20)");
+
+var legendSequential = d3.legendColor()
+    .shapeWidth(30)
+    .cells(4)
+    .orient("vertical")
+	//	.title("color:")
+		.titleWidth(100)
+    .scale(sequentialScale) 
+
+svg.select(".legendSequential")
+  .call(legendSequential); 
+*/
+
+});
+
+
+/*********************************************************************************************************************************************************************/
+function dragstarted(d) {
+  if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x;
+  d.fy = d.y;
+}
+
+function dragged(d) {
+  d.fx = d3.event.x;
+  d.fy = d3.event.y;
+}
+
+function dragended(d) {
+  if (!d3.event.active) simulation.alphaTarget(0);
+  d.fx = null;
+  d.fy = null;
+}
+/*_______________________________________________________________________________________________________________________________________________________________*/
+// Zooming function translates the size of the svg container.
+function zoomed() {
+	  container.attr("transform", "translate(" + d3.event.transform.x + ", " + d3.event.transform.y + ") scale(" + d3.event.transform.k + ")");
+}
+/*______________________________________________________________________________________________________________________________________*/
+// Search for nodes by making all unmatched nodes temporarily transparent.
+function searchNodes() {
+	var term = document.getElementById('searchTerm').value;
+	var selected = container.selectAll('.node').filter(function (d, i) {
+		return d.name.toLowerCase().search(term.toLowerCase()) == -1;
+	});
+	selected.style('opacity', '0');
+	var link = container.selectAll('.link');
+	link.style('stroke-opacity', '0');
+	d3.selectAll('.node').transition()
+		.duration(5000)
+		.style('opacity', '1');
+	d3.selectAll('.link').transition().duration(5000).style('stroke-opacity', '0.6');
+}
+/*___________________________________________________________________________________________________________________________________________*/
+
+
+function update() {
+	var newNode = [];
+   // node = node.data(graph.nodes);
+			node = node.data(newNode,  function(d) {return d.id;});
+			node.exit().remove();
+		
+	//	ENTER
+	var nodeEnter = node.enter().append("circle")
+		.attr("class", "node")
+		.attr("r", function(d) { return d.degree; })
+		.attr("fill", function(d) {return color(d.group);})
+		.call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended)
+        )
+				
+	//	ENTER + UPDATE
+	node = node.merge(nodeEnter);
+	
+
+	
+	
+	var newLink = [];
+
+	//	UPDATE
+	link = link.data(newLink, function(d) { return d.id;});
+           
+
+	//	EXIT
+	link.exit().remove();
+	
+	//	ENTER
+	linkEnter = link.enter().append("line").attr("class", "link");
+
+		
+//	ENTER + UPDATE
+	link = link.merge(linkEnter);
+	
+
+
+//	tick event handler with bounded box
+function ticked() {
+         node
+		.attr("cx", function(d) { return x(d.x); })
+		.attr("cy", function(d) { return y(d.y); });
+
+
+        link
+              .attr("x1", function(d) { return x(d.source.x); })
+              .attr("y1", function(d) { return y(d.source.y); })
+              .attr("x2", function(d) { return x(d.target.x); })
+              .attr("y2", function(d) { return y(d.target.y); });
+}
+
+	
+	simulation
+		.nodes(newNode).on("tick", ticked);
+  	simulation.force("link").links(newLink);
+  	simulation.alpha(1).alphaTarget(0).restart();
+	
+}
+
+/*****************************/
+
+// select the svg area
+var Svg = d3.select("#wrapper")
+
+// create a list of keys
+var keys = ["author", "paper", "author_author", "author_paper"]
+
+// Usually you have a color scale in your chart already
+//var color = d3.scaleOrdinal(d3.schemeCategory10)
+
+
+var color = d3.scaleOrdinal(d3.schemeCategory10)
+  .domain(keys)
+   .range(["#ff8c00", "#00bfff","#d71868", "#177245"]);
+  //.domain(["author", "paper", "author_author", "author_paper"]);
+  
+ // .range(d3.color);
+//.range(d3.schemeCategory10);
+
+// Add one dot in the legend for each name.
+Svg.selectAll("#wrapper")
+  .data(keys)
+  .enter()
+  .append("circle")
+    .attr("cx", 30)
+   .attr("cy", function(d,i){ return 260+ i*25}) // 100 is where the first dot appears. 25 is the distance between dots
+	
+    .attr("r", 3)
+   .style("fill", function(d){ return color(d)})
+
+// Add one dot in the legend for each name.
+Svg.selectAll("mylabels")
+  .data(keys)
+  .enter()
+  .append("text")
+    .attr("x", 50)
+    .attr("y", function(d,i){ return 260+ i*25}) // 100 is where the first dot appears. 25 is the distance between dots
+    .style("fill", function(d){ return color(d)})
+    .text(function(d){ return d})
+    .attr("text-anchor", "left")
+    .style("alignment-baseline", "middle")
+
+// Handmade legend
+/*
+// select the svg area
+var svg = d3.select("#wrapper")
+
+svg.append("circle").attr("cx",50).attr("cy",310).attr("r", 5).style ("fill", "#19070B")
+svg.append("circle").attr("cx",50).attr("cy",330).attr("r", 10).style("fill", "#19070B")
+svg.append("circle").attr("cx",50).attr("cy",360).attr("r", 15).style("fill", "#19070B")
+svg.append("circle").attr("cx",50).attr("cy",400).attr("r", 20).style ("fill", "#19070B")
+svg.append("circle").attr("cx",50).attr("cy",450).attr("r", 25).style("fill", "#19070B")
+svg.append("circle").attr("cx",50).attr("cy",510).attr("r", 30).style("fill", "#19070B")
+
+
+
+svg.append("text").attr("x", 90).attr("y", 313).text("0<Publication-Citation=<5").style("font-size", "15px").attr("alignment-baseline","middle")
+svg.append("text").attr("x", 90).attr("y", 333).text("5<Publication-Citation=<10").style("font-size", "15px").attr("alignment-baseline","middle")
+svg.append("text").attr("x", 90).attr("y", 363).text("10<Publication-Citation=<15").style("font-size", "15px").attr("alignment-baseline","middle")
+svg.append("text").attr("x", 90).attr("y", 403).text("15<Publication-Citation=<20").style("font-size", "15px").attr("alignment-baseline","middle")
+svg.append("text").attr("x", 90).attr("y", 453).text("20<Publication-Citation=<25").style("font-size", "15px").attr("alignment-baseline","middle")
+svg.append("text").attr("x", 90).attr("y", 513).text("25<Publication-Citation=<30").style("font-size", "15px").attr("alignment-baseline","middle")
+*/
+
+var linearScale = d3.scaleLinear()
+	.domain([0, 100])
+	.range([0, 700]);
+
+var sqrtScale = d3.scaleSqrt()
+	.domain([0, 100])
+	.range([0, 30]);
+
+var myData = [0,0,0,0, 1, 3, 6, 7, 8, 10, 18, 21];
+
+d3.select('#wrapper')
+	.selectAll('circle')
+	.data(myData)
+	.enter().append('circle')
+	.attr('r', function(d) {return sqrtScale(d);})
+	//.attr('cx', function(d) {return linearScale(d);})
+    .attr("cx", 30)
+    .attr("cy", function(d,i){ return 250 + i*30});
+	/*.attr('cy', function(d) {
+		return linearScale(d);
+	});*/
+
+d3.select('#wrapper')
+  .selectAll('text')
+  .data(myData)
+  .enter()
+  .append('text')
+ /* .attr('x', function(d, i) {
+    return linearScale(i);
+  })*/
+  .attr("x",65)
+  .attr("y", function(d,i){ return 250 + i*30})
+  
+  .text(function(d) { return d; })
+  .attr("text-anchor", "middle")
+    .style("font-size", "12px")
+   .style("font-weight","bold")
+
+   //.style("text-decoration", "underline")
+  .style('fill', function(d) { return linearScale(d); });
+
+</script>
+</body>
